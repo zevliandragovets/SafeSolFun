@@ -4,10 +4,10 @@ import { RugDetector } from '@/lib/solana'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userAddress: string } }
+  { params }: { params: Promise<{ id: string; userAddress: string }> }
 ) {
   try {
-    const { userAddress } = params
+    const { id, userAddress } = await params
     const { searchParams } = new URL(request.url)
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
 
