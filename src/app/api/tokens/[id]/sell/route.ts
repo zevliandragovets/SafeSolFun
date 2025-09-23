@@ -4,9 +4,10 @@ import { BondingCurve } from '@/lib/solana'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const { tokenAmount, slippage = 5, sellerAddress } = await request.json()
     
     if (!tokenAmount || tokenAmount <= 0) {
@@ -25,7 +26,7 @@ export async function POST(
 
     // Get token from database
     const token = await prisma.token.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!token) {
@@ -84,7 +85,7 @@ export async function POST(
     // Update database in transaction
     const [updatedToken, transactionRecord] = await Promise.all([
       prisma.token.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           currentSupply: newSupply,
           price: newPrice,
@@ -93,7 +94,7 @@ export async function POST(
       }),
       prisma.transaction.create({
         data: {
-          tokenId: params.id,
+          tokenId: id,
           userAddress: sellerAddress,
           type: 'SELL',
           amount: tokenAmount,
