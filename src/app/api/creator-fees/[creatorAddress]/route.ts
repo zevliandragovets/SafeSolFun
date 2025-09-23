@@ -22,9 +22,9 @@ export async function GET(
       orderBy: { createdAt: 'desc' }
     })
 
-    // Calculate totals
-    const totalEarned = creatorFees.reduce((sum, fee) => sum + fee.totalFees, 0)
-    const totalClaimed = creatorFees.reduce((sum, fee) => sum + fee.claimedFees, 0)
+    // Calculate totals with proper typing
+    const totalEarned = creatorFees.reduce((sum: number, fee) => sum + Number(fee.totalFees), 0)
+    const totalClaimed = creatorFees.reduce((sum: number, fee) => sum + Number(fee.claimedFees), 0)
     const availableToClaim = totalEarned - totalClaimed
 
     // Get token information for each fee record
@@ -47,9 +47,9 @@ export async function GET(
           tokenAddress: fee.tokenAddress,
           tokenName: tokenInfo?.name || 'Unknown',
           tokenSymbol: tokenInfo?.symbol || 'UNK',
-          totalFees: fee.totalFees,
-          claimedFees: fee.claimedFees,
-          availableFees: fee.totalFees - fee.claimedFees,
+          totalFees: Number(fee.totalFees),
+          claimedFees: Number(fee.claimedFees),
+          availableFees: Number(fee.totalFees) - Number(fee.claimedFees),
           lastClaimedAt: fee.lastClaimedAt,
           createdAt: fee.createdAt,
           updatedAt: fee.updatedAt
@@ -59,8 +59,8 @@ export async function GET(
 
     // Get additional statistics
     const activeTokens = creatorFees.length
-    const tokensWithClaimableFees = creatorFees.filter(fee => fee.totalFees > fee.claimedFees).length
-    const fullyClaimedTokens = creatorFees.filter(fee => fee.totalFees <= fee.claimedFees).length
+    const tokensWithClaimableFees = creatorFees.filter(fee => Number(fee.totalFees) > Number(fee.claimedFees)).length
+    const fullyClaimedTokens = creatorFees.filter(fee => Number(fee.totalFees) <= Number(fee.claimedFees)).length
 
     return NextResponse.json({
       success: true,
@@ -146,10 +146,10 @@ export async function PUT(
       data: {
         creatorAddress,
         tokenAddress,
-        previousTotal: updatedFee.totalFees - additionalFees,
+        previousTotal: Number(updatedFee.totalFees) - additionalFees,
         additionalFees,
-        newTotal: updatedFee.totalFees,
-        availableToClaim: updatedFee.totalFees - updatedFee.claimedFees
+        newTotal: Number(updatedFee.totalFees),
+        availableToClaim: Number(updatedFee.totalFees) - Number(updatedFee.claimedFees)
       }
     })
 
