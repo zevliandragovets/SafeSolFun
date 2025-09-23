@@ -9,13 +9,36 @@ interface PricePoint {
   transactions: number;
 }
 
+// Define the transaction type from Prisma select
+type TransactionData = {
+  price: any | null; // Prisma Decimal type
+  solAmount: any | null; // Prisma Decimal type
+  amount: any; // Prisma Decimal type
+  createdAt: Date;
+  type: string;
+}
+
+// Define the price history type from Prisma select
+type StoredPriceHistory = {
+  price: any; // Prisma Decimal type
+  volume: any | null; // Prisma Decimal type
+  createdAt: Date;
+}
+
+// Define the recent transaction type
+type RecentTransaction = {
+  price: any | null; // Prisma Decimal type
+  solAmount: any | null; // Prisma Decimal type
+  amount: any; // Prisma Decimal type
+}
+
 // Generate real-time price history from actual transactions
 async function generateRealTimePriceHistory(tokenId: string, hours: number = 24): Promise<PricePoint[]> {
   try {
     const startTime = new Date(Date.now() - hours * 60 * 60 * 1000)
     
     // Get all transactions within the time period
-    const transactions = await prisma.transaction.findMany({
+    const transactions: TransactionData[] = await prisma.transaction.findMany({
       where: {
         tokenId,
         createdAt: {
@@ -49,7 +72,7 @@ async function generateRealTimePriceHistory(tokenId: string, hours: number = 24)
       timestamp: number;
     }>()
 
-    transactions.forEach(tx => {
+    transactions.forEach((tx: TransactionData) => {
       const txTime = tx.createdAt.getTime()
       const intervalStart = Math.floor(txTime / intervalMs) * intervalMs
       
@@ -113,7 +136,7 @@ async function getStoredPriceHistory(tokenId: string, hours: number = 24): Promi
   try {
     const startTime = new Date(Date.now() - hours * 60 * 60 * 1000)
     
-    const storedHistory = await prisma.priceHistory.findMany({
+    const storedHistory: StoredPriceHistory[] = await prisma.priceHistory.findMany({
       where: { 
         tokenId,
         createdAt: {
@@ -128,7 +151,7 @@ async function getStoredPriceHistory(tokenId: string, hours: number = 24): Promi
       }
     })
     
-    return storedHistory.map(entry => ({
+    return storedHistory.map((entry: StoredPriceHistory) => ({
       time: entry.createdAt.toLocaleTimeString('en-US', { 
         hour: '2-digit', 
         minute: '2-digit',
@@ -165,7 +188,7 @@ async function storePricePoint(tokenId: string, price: number, volume: number) {
 // Calculate current price from recent transactions
 async function getCurrentPrice(tokenId: string): Promise<number> {
   try {
-    const recentTx = await prisma.transaction.findFirst({
+    const recentTx: RecentTransaction | null = await prisma.transaction.findFirst({
       where: { tokenId },
       orderBy: { createdAt: 'desc' },
       select: {
