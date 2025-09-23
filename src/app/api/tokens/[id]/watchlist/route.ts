@@ -52,7 +52,32 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+    const { searchParams } = new URL(request.url)
     
+    // Check if this is a transactions request
+    const endpoint = searchParams.get('endpoint')
+    
+    if (endpoint === 'transactions') {
+      return getTransactions(request, id)
+    }
+    
+    // Default: Get token details
+    return getTokenDetails(request, id)
+
+  } catch (error) {
+    console.error('Route handler error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    )
+  } finally {
+    await prisma.$disconnect()
+  }
+}
+
+// Token details handler
+async function getTokenDetails(request: NextRequest, id: string) {
+  try {
     // Fetch token with related data
     const token = await prisma.token.findUnique({
       where: { id },
@@ -144,18 +169,12 @@ export async function GET(
       { success: false, error: 'Failed to fetch token details' },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
-// Transactions endpoint
-export async function GET_TRANSACTIONS(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// Transactions handler
+async function getTransactions(request: NextRequest, id: string) {
   try {
-    const { id } = await params
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
@@ -224,7 +243,5 @@ export async function GET_TRANSACTIONS(
       { success: false, error: 'Failed to fetch transactions' },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 }
