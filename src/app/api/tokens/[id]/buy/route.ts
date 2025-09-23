@@ -32,9 +32,10 @@ function getPayerKeypair() {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const { solAmount, slippage = 5, buyerAddress } = await request.json()
     
     if (!solAmount || solAmount <= 0) {
@@ -53,7 +54,7 @@ export async function POST(
 
     // Get token from database
     const token = await prisma.token.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!token) {
@@ -137,7 +138,7 @@ export async function POST(
     // Update database
     const [updatedToken, transaction_record] = await Promise.all([
       prisma.token.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           currentSupply: newSupply,
           price: newPrice,
@@ -146,7 +147,7 @@ export async function POST(
       }),
       prisma.transaction.create({
         data: {
-          tokenId: params.id,
+          tokenId: id,
           userAddress: buyerAddress,
           type: 'BUY',
           amount: tokensToReceive,
@@ -180,7 +181,7 @@ export async function POST(
     const GRADUATION_MARKET_CAP = 30 // 30 SOL
     if (newMarketCap >= GRADUATION_MARKET_CAP && !token.isGraduated) {
       await prisma.token.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           isGraduated: true,
           graduatedAt: new Date()
