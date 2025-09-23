@@ -29,7 +29,7 @@ export async function GET(
 
     // Get token information for each fee record
     const feeDetails = await Promise.all(
-      creatorFees.map(async (fee) => {
+      creatorFees.map(async (fee: any) => {
         // Try to get token info if it exists
         let tokenInfo = null
         try {
