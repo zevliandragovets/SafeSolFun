@@ -23,8 +23,8 @@ export async function GET(
     })
 
     // Calculate totals with proper typing
-    const totalEarned = creatorFees.reduce((sum: number, fee) => sum + Number(fee.totalFees), 0)
-    const totalClaimed = creatorFees.reduce((sum: number, fee) => sum + Number(fee.claimedFees), 0)
+    const totalEarned = creatorFees.reduce((sum: number, fee: any) => sum + Number(fee.totalFees), 0)
+    const totalClaimed = creatorFees.reduce((sum: number, fee: any) => sum + Number(fee.claimedFees), 0)
     const availableToClaim = totalEarned - totalClaimed
 
     // Get token information for each fee record
@@ -59,8 +59,8 @@ export async function GET(
 
     // Get additional statistics
     const activeTokens = creatorFees.length
-    const tokensWithClaimableFees = creatorFees.filter(fee => Number(fee.totalFees) > Number(fee.claimedFees)).length
-    const fullyClaimedTokens = creatorFees.filter(fee => Number(fee.totalFees) <= Number(fee.claimedFees)).length
+    const tokensWithClaimableFees = creatorFees.filter((fee: any) => Number(fee.totalFees) > Number(fee.claimedFees)).length
+    const fullyClaimedTokens = creatorFees.filter((fee: any) => Number(fee.totalFees) <= Number(fee.claimedFees)).length
 
     return NextResponse.json({
       success: true,
