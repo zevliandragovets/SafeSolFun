@@ -17,6 +17,25 @@ interface HolderData {
   isWhale: boolean;
 }
 
+// Define the transaction type from Prisma select
+type TransactionData = {
+  userAddress: string;
+  type: string;
+  amount: any; // Prisma Decimal type
+  price: any | null; // Prisma Decimal type
+  solAmount: any | null; // Prisma Decimal type
+  createdAt: Date;
+}
+
+// Define the holder type from Prisma select
+type HolderRecord = {
+  address: string;
+  balance: any; // Prisma Decimal type
+  percentage: any | null; // Prisma Decimal type
+  lastActivity: Date | null;
+  updatedAt: Date;
+}
+
 function serializeBigInt(obj: any): any {
   if (obj === null || obj === undefined) {
     return obj
@@ -50,7 +69,7 @@ async function calculateRealTimeHolders(tokenId: string, currentPrice: number, t
     console.log(`Calculating real-time holders for token ${tokenId}`)
     
     // Get all transactions for this token
-    const transactions = await prisma.transaction.findMany({
+    const transactions: TransactionData[] = await prisma.transaction.findMany({
       where: { tokenId },
       select: {
         userAddress: true,
@@ -87,7 +106,7 @@ async function calculateRealTimeHolders(tokenId: string, currentPrice: number, t
     }>()
 
     // Process each transaction
-    transactions.forEach(tx => {
+    transactions.forEach((tx: TransactionData) => {
       const address = tx.userAddress
       const amount = parseFloat(tx.amount.toString())
       const price = tx.price ? 
@@ -271,7 +290,7 @@ export async function GET(
 
     try {
       // Check if we have recent holder data (less than 5 minutes old)
-      const recentHolders = await prisma.holder.findMany({
+      const recentHolders: HolderRecord[] = await prisma.holder.findMany({
         where: { 
           tokenId: id,
           updatedAt: {
@@ -291,7 +310,7 @@ export async function GET(
 
       if (recentHolders.length > 0 && !realtime) {
         console.log(`Using ${recentHolders.length} cached holders`)
-        holders = recentHolders.map(holder => ({
+        holders = recentHolders.map((holder: HolderRecord) => ({
           address: holder.address,
           balance: parseFloat(holder.balance.toString()),
           percentage: parseFloat(holder.percentage?.toString() || '0'),
