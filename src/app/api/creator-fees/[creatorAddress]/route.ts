@@ -4,10 +4,10 @@ import { TokenUtils } from '@/lib/solana'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { creatorAddress: string } }
+  { params }: { params: Promise<{ creatorAddress: string }> }
 ) {
   try {
-    const { creatorAddress } = params
+    const { creatorAddress } = await params
 
     if (!TokenUtils.isValidSolanaAddress(creatorAddress)) {
       return NextResponse.json(
@@ -90,10 +90,10 @@ export async function GET(
 // Optional: Add PUT endpoint to manually update fees (for admin purposes)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { creatorAddress: string } }
+  { params }: { params: Promise<{ creatorAddress: string }> }
 ) {
   try {
-    const { creatorAddress } = params
+    const { creatorAddress } = await params
     const body = await request.json()
     
     const { tokenAddress, additionalFees } = body
