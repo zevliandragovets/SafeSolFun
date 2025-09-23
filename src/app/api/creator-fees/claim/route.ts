@@ -122,6 +122,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Define the selected fee type for GET endpoint
+type SelectedCreatorFee = {
+  id: string
+  tokenAddress: string
+  totalFees: number
+  claimedFees: number
+  lastClaimedAt: Date | null
+  createdAt: Date
+}
+
 // GET endpoint to check claimable fees before claiming
 export async function GET(request: NextRequest) {
   try {
@@ -148,7 +158,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all fee records for this creator
-    const creatorFees = await prisma.creatorFee.findMany({
+    const creatorFees: SelectedCreatorFee[] = await prisma.creatorFee.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -162,7 +172,7 @@ export async function GET(request: NextRequest) {
     })
 
     let totalClaimable = 0
-    const feeBreakdown = creatorFees.map(fee => {
+    const feeBreakdown = creatorFees.map((fee: SelectedCreatorFee) => {
       const claimableAmount = Math.max(0, fee.totalFees - fee.claimedFees)
       totalClaimable += claimableAmount
       
