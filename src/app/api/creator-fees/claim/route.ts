@@ -7,6 +7,18 @@ function isValidSolanaAddress(address: string): boolean {
   return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)
 }
 
+// Define the CreatorFee type based on your Prisma schema
+type CreatorFee = {
+  id: string
+  creatorAddress: string
+  tokenAddress: string
+  totalFees: number
+  claimedFees: number
+  lastClaimedAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { creatorAddress, tokenAddress } = await request.json()
@@ -35,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get fees to claim - find records where totalFees > claimedFees
-    const feesToClaim = await prisma.creatorFee.findMany({
+    const feesToClaim: CreatorFee[] = await prisma.creatorFee.findMany({
       where: whereClause
     })
 
@@ -47,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Filter fees that have claimable amounts
-    const claimableFees = feesToClaim.filter(fee => fee.totalFees > fee.claimedFees)
+    const claimableFees = feesToClaim.filter((fee: CreatorFee) => fee.totalFees > fee.claimedFees)
 
     if (claimableFees.length === 0) {
       return NextResponse.json(
