@@ -28,6 +28,31 @@ import { existsSync } from 'fs'
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB
 
+// Type definition for token from database
+type TokenFromDB = {
+  id: string;
+  name: string;
+  symbol: string;
+  description: string | null;
+  imageUrl: string | null;
+  bannerUrl: string | null;
+  creatorAddress: string;
+  tokenAddress: string;
+  bondingCurveAddress: string | null;
+  totalSupply: bigint;
+  currentSupply: bigint;
+  marketCap: number;
+  price: number;
+  website: string | null;
+  twitter: string | null;
+  telegram: string | null;
+  isGraduated: boolean;
+  graduatedAt: Date | null;
+  rugScore: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 // Validate image URL - Fixed to handle both local and external URLs
 function validateImageUrl(url: string): boolean {
   if (!url) return false
@@ -595,7 +620,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Process tokens with enhanced data and proper image handling
-    const tokensWithEnhancedData = tokens.map(token => {
+    const tokensWithEnhancedData = tokens.map((token: TokenFromDB) => {
       const serializedToken = serializeToken(token)
       const riskLevel = RugDetector.getRiskLevel(serializedToken.rugScore) || 'MEDIUM'
       
