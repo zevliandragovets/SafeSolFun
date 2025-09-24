@@ -54,7 +54,7 @@ export async function GET(
     }
 
     // Calculate balance using enum comparison
-    const balance = transactions.reduce((acc, tx) => {
+    const balance = transactions.reduce((acc: number, tx) => {
       const amount = parseFloat(tx.amount.toString())
       // Compare with the enum value 'BUY', not the string 'buy'
       return tx.type === 'BUY' ? acc + amount : acc - amount
@@ -80,11 +80,11 @@ export async function GET(
     // Calculate additional metrics
     const totalBought = transactions
       .filter(tx => tx.type === 'BUY')
-      .reduce((sum, tx) => sum + parseFloat(tx.amount.toString()), 0)
+      .reduce((sum: number, tx) => sum + parseFloat(tx.amount.toString()), 0)
     
     const totalSold = transactions
       .filter(tx => tx.type === 'SELL')
-      .reduce((sum, tx) => sum + parseFloat(tx.amount.toString()), 0)
+      .reduce((sum: number, tx) => sum + parseFloat(tx.amount.toString()), 0)
 
     const response = {
       success: true,
@@ -140,7 +140,7 @@ export async function POST(
       }
     })
 
-    const balance = transactions.reduce((acc, tx) => {
+    const balance = transactions.reduce((acc: number, tx) => {
       const amount = parseFloat(tx.amount.toString())
       return tx.type === 'BUY' ? acc + amount : acc - amount
     }, 0)
@@ -163,4 +163,5 @@ export async function POST(
       error: 'Failed to recalculate balance'
     }, { status: 500 })
   }
+
 }
