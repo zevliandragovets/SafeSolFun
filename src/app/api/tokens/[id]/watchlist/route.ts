@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/database'
 import { RugDetector, BondingCurve } from '@/lib/solana'
 
+// Define types for Prisma query results
+type TransactionResult = {
+  id: string;
+  type: string;
+  amount: bigint;
+  solAmount: bigint;
+  price: bigint;
+  userAddress: string;
+  signature: string;
+  createdAt: Date;
+}
+
+type TransactionWithToken = TransactionResult & {
+  token: {
+    name: string;
+    symbol: string;
+    imageUrl: string | null;
+  };
+}
+
 // Comprehensive BigInt serialization function
 function serializeBigInt(obj: any): any {
   if (obj === null || obj === undefined) {
@@ -119,13 +139,13 @@ async function getTokenDetails(request: NextRequest, id: string) {
     const riskAnalysis = RugDetector.getDetailedAnalysis(serializedToken)
     const bondingCurveProgress = BondingCurve.getProgress(serializedToken.currentSupply)
 
-    // Calculate 24h statistics
+    // Calculate 24h statistics - with explicit typing
     const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const volume24h = token.transactions
-      .filter(tx => tx.createdAt > last24h)
-      .reduce((sum, tx) => sum + Number(tx.solAmount), 0)
+      .filter((tx: TransactionResult) => tx.createdAt > last24h)
+      .reduce((sum: number, tx: TransactionResult) => sum + Number(tx.solAmount), 0)
 
-    const uniqueHolders = new Set(token.transactions.map(tx => tx.userAddress)).size
+    const uniqueHolders = new Set(token.transactions.map((tx: TransactionResult) => tx.userAddress)).size
     
     // Mock price change (in production, you'd calculate from historical data)
     const priceChange24h = Math.random() * 20 - 10 // -10% to +10%
@@ -153,7 +173,7 @@ async function getTokenDetails(request: NextRequest, id: string) {
           ath: serializedToken.price,
           atl: serializedToken.price * 0.1
         },
-        recentTransactions: token.transactions.map(tx => ({
+        recentTransactions: token.transactions.map((tx: TransactionResult) => ({
           ...serializeBigInt(tx),
           userAddress: tx.userAddress.slice(0, 4) + '...' + tx.userAddress.slice(-4),
           timeAgo: getTimeAgo(tx.createdAt)
@@ -217,7 +237,7 @@ async function getTransactions(request: NextRequest, id: string) {
     const responseData = {
       success: true,
       data: {
-        transactions: transactions.map(tx => ({
+        transactions: transactions.map((tx: TransactionWithToken) => ({
           ...serializeBigInt(tx),
           userAddress: tx.userAddress.slice(0, 4) + '...' + tx.userAddress.slice(-4),
           timeAgo: getTimeAgo(tx.createdAt),
