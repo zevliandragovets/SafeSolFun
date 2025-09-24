@@ -43,12 +43,23 @@ function formatTimeAgo(dateString: string | Date): string {
   return `${minutes}m ago`
 }
 
-// Define the transaction type based on your Prisma select
+// Define the transaction type for calculateUserPNL function
 type TransactionData = {
   type: string;
   amount: bigint;
   price: bigint | null;
   solAmount: bigint | null;
+  createdAt: Date;
+}
+
+// Define the transaction type returned by the Prisma query
+type PrismaTransactionResult = {
+  id: string;
+  type: string;
+  amount: bigint;
+  solAmount: bigint | null;
+  price: bigint | null;
+  userAddress: string;
   createdAt: Date;
 }
 
@@ -198,7 +209,7 @@ export async function GET(
     
     // Process transactions for frontend
     const processedTransactions = await Promise.all(
-      transactions.map(async (tx) => {
+      transactions.map(async (tx: PrismaTransactionResult) => {
         const serialized = serializeBigInt(tx)
         const txPrice = parseFloat(serialized.price?.toString() || serialized.solAmount?.toString() || '0')
         const amount = parseFloat(serialized.amount.toString())
