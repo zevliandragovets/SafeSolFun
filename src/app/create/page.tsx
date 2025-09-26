@@ -1,3 +1,4 @@
+
 'use client'
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
@@ -38,14 +39,32 @@ const useWallet = () => {
 
   const connect = async () => {
     setConnecting(true)
-    setTimeout(() => {
-      setConnected(true)
-      setPublicKey('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM')
-      setConnecting(false)
-    }, 1000)
+    
+    // Check if Phantom wallet is available
+    if (typeof window !== 'undefined' && window.solana && window.solana.isPhantom) {
+      try {
+        const response = await window.solana.connect()
+        setConnected(true)
+        setPublicKey(response.publicKey.toString())
+        setConnecting(false)
+      } catch (error) {
+        console.error('Wallet connection failed:', error)
+        setConnecting(false)
+      }
+    } else {
+      // Fallback for development/testing
+      setTimeout(() => {
+        setConnected(true)
+        setPublicKey('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM')
+        setConnecting(false)
+      }, 1000)
+    }
   }
 
   const disconnect = () => {
+    if (typeof window !== 'undefined' && window.solana) {
+      window.solana.disconnect()
+    }
     setConnected(false)
     setPublicKey(null)
   }
@@ -87,113 +106,92 @@ export default function CreatePage() {
     uploaded: false
   })
 
-  // Upload image to server
-  const uploadImage = async (file: File): Promise<string> => {
-    const formData = new FormData()
-    formData.append('image', file)
-    
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    })
-    
-    if (!response.ok) {
-      throw new Error('Failed to upload image')
-    }
-    
-    const data = await response.json()
-    return data.url
-  }
+  const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
+    if (!file) return
 
-const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
-  if (!file) return
+    const preview = URL.createObjectURL(file)
+    const uploadState = type === 'logo' ? logoUpload : bannerUpload
+    const setUploadState = type === 'logo' ? setLogoUpload : setBannerUpload
 
-  const preview = URL.createObjectURL(file)
-  const uploadState = type === 'logo' ? logoUpload : bannerUpload
-  const setUploadState = type === 'logo' ? setLogoUpload : setBannerUpload
-
-  setUploadState({
-    file,
-    preview,
-    uploading: true,
-    uploaded: false
-  })
-
-  try {
-    const formData = new FormData()
-    formData.append('image', file)
-    
-    console.log(`Uploading ${type}:`, file.name, file.size, file.type)
-    
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-      headers: {
-        // Don't set Content-Type, let browser set it with boundary for multipart/form-data
-      },
-    })
-    
-    console.log('Upload response status:', response.status)
-    
-    if (!response.ok) {
-      let errorMessage = `Upload failed: ${response.status} ${response.statusText}`
-      try {
-        const errorData = await response.json()
-        errorMessage = errorData.error || errorMessage
-      } catch (parseError) {
-        // If we can't parse the error response, use the default message
-      }
-      throw new Error(errorMessage)
-    }
-    
-    const data = await response.json()
-    console.log('Upload successful:', data)
-    
-    if (!data.success || !data.url) {
-      throw new Error('Invalid response from upload service')
-    }
-    
     setUploadState({
       file,
       preview,
-      uploading: false,
-      uploaded: true
-    })
-
-    // Update form data with uploaded image URL
-    setFormData(prev => ({
-      ...prev,
-      [type === 'logo' ? 'imageUrl' : 'bannerUrl']: data.url
-    }))
-    
-    console.log(`${type} upload completed successfully`)
-    
-  } catch (error) {
-    console.error(`${type} upload failed:`, error)
-    
-    // Clear the upload state
-    setUploadState({
-      file: null,
-      preview: null,
-      uploading: false,
+      uploading: true,
       uploaded: false
     })
-    
-    // Clean up the preview URL
-    if (preview) {
-      URL.revokeObjectURL(preview)
+
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+      
+      console.log(`Uploading ${type}:`, file.name, file.size, file.type)
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      
+      console.log('Upload response status:', response.status)
+      
+      if (!response.ok) {
+        let errorMessage = `Upload failed: ${response.status} ${response.statusText}`
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+        } catch (parseError) {
+          // If we can't parse the error response, use the default message
+        }
+        throw new Error(errorMessage)
+      }
+      
+      const data = await response.json()
+      console.log('Upload successful:', data)
+      
+      if (!data.success || !data.url) {
+        throw new Error('Invalid response from upload service')
+      }
+      
+      setUploadState({
+        file,
+        preview,
+        uploading: false,
+        uploaded: true
+      })
+
+      // Update form data with uploaded image URL
+      setFormData(prev => ({
+        ...prev,
+        [type === 'logo' ? 'imageUrl' : 'bannerUrl']: data.url
+      }))
+      
+      console.log(`${type} upload completed successfully`)
+      
+    } catch (error) {
+      console.error(`${type} upload failed:`, error)
+      
+      // Clear the upload state
+      setUploadState({
+        file: null,
+        preview: null,
+        uploading: false,
+        uploaded: false
+      })
+      
+      // Clean up the preview URL
+      if (preview) {
+        URL.revokeObjectURL(preview)
+      }
+      
+      // Show error to user
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      setError(`${type === 'logo' ? 'Logo' : 'Banner'} upload failed: ${errorMessage}`)
+      
+      // Auto-clear error after 8 seconds
+      setTimeout(() => {
+        setError(null)
+      }, 8000)
     }
-    
-    // Show error to user
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    setError(`${type === 'logo' ? 'Logo' : 'Banner'} upload failed: ${errorMessage}`)
-    
-    // Auto-clear error after 8 seconds
-    setTimeout(() => {
-      setError(null)
-    }, 8000)
   }
-}
 
   const removeImage = (type: 'logo' | 'banner') => {
     const uploadState = type === 'logo' ? logoUpload : bannerUpload
@@ -225,11 +223,61 @@ const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
     return formData.name.trim() !== '' && formData.symbol.trim() !== ''
   }
 
+  const validateFormData = () => {
+    const errors: string[] = []
+    
+    // Name validation
+    if (!formData.name.trim()) {
+      errors.push('Token name is required')
+    } else if (formData.name.trim().length > 32) {
+      errors.push('Token name must be 32 characters or less')
+    }
+    
+    // Symbol validation
+    if (!formData.symbol.trim()) {
+      errors.push('Token symbol is required')
+    } else if (formData.symbol.trim().length > 10 || formData.symbol.trim().length < 1) {
+      errors.push('Token symbol must be between 1 and 10 characters')
+    }
+    
+    // Description validation
+    if (formData.description && formData.description.trim().length > 1000) {
+      errors.push('Description must be 1000 characters or less')
+    }
+    
+    // Website validation
+    if (formData.website.trim() && formData.website.trim() !== '') {
+      try {
+        const url = formData.website.trim()
+        new URL(url.startsWith('http') ? url : `https://${url}`)
+      } catch {
+        errors.push('Please enter a valid website URL')
+      }
+    }
+    
+    // Initial buy amount validation
+    if (formData.initialBuyAmount && formData.initialBuyAmount !== '') {
+      const amount = parseFloat(formData.initialBuyAmount)
+      if (isNaN(amount) || amount < 0) {
+        errors.push('Initial buy amount must be a valid positive number')
+      }
+    }
+    
+    return errors
+  }
+
   const handleNext = () => {
     if (step === 1 && !validateStep1()) {
       setError('Please fill in required fields (Name and Symbol)')
       return
     }
+    
+    const validationErrors = validateFormData()
+    if (validationErrors.length > 0) {
+      setError(validationErrors[0])
+      return
+    }
+    
     setError(null)
     setStep(2)
   }
@@ -324,7 +372,8 @@ const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
       setLoading(false)
     }
   }
-  // Success state (unchanged)
+
+  // Success state
   if (success) {
     return (
       <div className="min-h-screen bg-black">
@@ -489,7 +538,7 @@ const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
               {/* Logo Upload */}
               <div className="group">
                 <label className="block text-sm font-medium text-white/80 mb-3">
-                  Token Logo <span className="text-[#C0283D]">*</span>
+                  Token Logo
                 </label>
                 <div className={`relative border-2 border-dashed rounded-2xl p-8 transition-all ${
                   logoUpload.preview 
@@ -625,63 +674,17 @@ const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
                     className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all"
                   />
                 </div>
-
+                
                 <div>
-                  <label className="block text-sm font-medium text-white/80 mb-3">
-                    Symbol <span className="text-[#C0283D]">*</span>
-                  </label>
+                  <label className="block text-sm font-medium text-white/80 mb-3">Telegram</label>
                   <input
                     type="text"
-                    value={formData.symbol}
-                    onChange={(e) => handleInputChange('symbol', e.target.value.toUpperCase())}
-                    placeholder="e.g. SOL"
-                    maxLength={10}
+                    value={formData.telegram}
+                    onChange={(e) => handleInputChange('telegram', e.target.value)}
+                    placeholder="@username"
                     className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all"
                   />
                 </div>
-              </div>
-
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-white/80 mb-3">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
-                  placeholder="Describe your token's purpose and vision..."
-                  maxLength={1000}
-                  rows={4}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all resize-none"
-                />
-              </div>
-            </div>
-
-            {/* Social Links */}
-            <div className="bg-gradient-to-r from-white/[0.02] to-white/[0.01] backdrop-blur-sm rounded-2xl p-8 border border-white/10">              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <input
-                  type="url"
-                  value={formData.website}
-                  onChange={(e) => handleInputChange('website', e.target.value)}
-                  placeholder="Website URL"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all"
-                />
-                
-                <input
-                  type="text"
-                  value={formData.twitter}
-                  onChange={(e) => handleInputChange('twitter', e.target.value)}
-                  placeholder="Twitter username"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all"
-                />
-                
-                <input
-                  type="text"
-                  value={formData.telegram}
-                  onChange={(e) => handleInputChange('telegram', e.target.value)}
-                  placeholder="Telegram username"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all"
-                />
               </div>
             </div>
 
@@ -886,7 +889,4 @@ const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
       </div>
     </div>
   )
-
 }
-
-
