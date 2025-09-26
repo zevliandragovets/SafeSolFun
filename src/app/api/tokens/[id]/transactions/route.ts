@@ -43,7 +43,7 @@ function formatTimeAgo(dateString: string | Date): string {
   return `${minutes}m ago`
 }
 
-// Define the transaction type for calculateUserPNL function
+// Updated transaction type for calculateUserPNL function to match actual Prisma result
 type TransactionData = {
   type: string;
   amount: bigint;
@@ -87,8 +87,8 @@ async function calculateUserPNL(userAddress: string, tokenId: string, currentPri
     let totalSolReceived = 0
     let averageBuyPrice = 0
 
-    // Calculate user's position - explicitly type the tx parameter
-    userTransactions.forEach((tx: TransactionData) => {
+    // Calculate user's position - the tx parameter will match TransactionData type from Prisma
+    userTransactions.forEach((tx) => {
       const amount = parseFloat(tx.amount.toString())
       const solAmount = parseFloat(tx.solAmount?.toString() || tx.price?.toString() || '0')
       
