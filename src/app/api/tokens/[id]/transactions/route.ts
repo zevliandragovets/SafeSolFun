@@ -52,16 +52,7 @@ type TransactionData = {
   createdAt: Date;
 }
 
-// Define the transaction type returned by the Prisma query
-type PrismaTransactionResult = {
-  id: string;
-  type: string;
-  amount: bigint;
-  solAmount: bigint | null;
-  price: bigint | null;
-  userAddress: string;
-  createdAt: Date;
-}
+// Remove explicit type definition to let TypeScript infer from Prisma
 
 async function calculateUserPNL(userAddress: string, tokenId: string, currentPrice: number) {
   try {
@@ -209,7 +200,7 @@ export async function GET(
     
     // Process transactions for frontend
     const processedTransactions = await Promise.all(
-      transactions.map(async (tx: PrismaTransactionResult) => {
+      transactions.map(async (tx) => {
         const serialized = serializeBigInt(tx)
         const txPrice = parseFloat(serialized.price?.toString() || serialized.solAmount?.toString() || '0')
         const amount = parseFloat(serialized.amount.toString())
