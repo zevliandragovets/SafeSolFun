@@ -8,13 +8,11 @@ export async function GET(
   try {
     const { id } = await params
 
-    // Get token-specific fees or use default platform fees
+    // Check if token exists
     const token = await prisma.token.findUnique({
       where: { id },
       select: {
-        buyFee: true,
-        sellFee: true,
-        platformFee: true
+        id: true
       }
     })
 
@@ -22,11 +20,13 @@ export async function GET(
       return NextResponse.json({ error: 'Token not found' }, { status: 404 })
     }
 
+    // Return default platform fees since buyFee, sellFee, platformFee don't exist in Token model
     return NextResponse.json({
-      buyFee: parseFloat(token.buyFee?.toString() || '1'),
-      sellFee: parseFloat(token.sellFee?.toString() || '1'),
-      platformFee: parseFloat(token.platformFee?.toString() || '0.5')
+      buyFee: 1,
+      sellFee: 1,
+      platformFee: 0.5
     })
+
   } catch (error) {
     console.error('Error fetching trading fees:', error)
     return NextResponse.json({ error: 'Failed to fetch fees' }, { status: 500 })
