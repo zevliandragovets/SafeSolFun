@@ -234,31 +234,22 @@ const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
     setStep(2)
   }
 
-const handleCreateToken = async () => {
+  const handleCreateToken = async () => {
     if (!connected || !publicKey) {
       setError('Please connect your wallet first')
       return
     }
 
-    // Enhanced validation before making API call
+    // Validate all form data before submission
+    const validationErrors = validateFormData()
+    if (validationErrors.length > 0) {
+      setError(validationErrors[0])
+      return
+    }
+
+    // Additional validation for required fields
     if (!formData.name.trim() || !formData.symbol.trim()) {
       setError('Please fill in required fields (Name and Symbol)')
-      return
-    }
-
-    // Additional client-side validations to match API validation
-    if (formData.name.trim().length > 32) {
-      setError('Token name must be 32 characters or less')
-      return
-    }
-
-    if (formData.symbol.trim().length > 10 || formData.symbol.trim().length < 1) {
-      setError('Token symbol must be between 1 and 10 characters')
-      return
-    }
-
-    if (formData.description && formData.description.trim().length > 1000) {
-      setError('Description must be 1000 characters or less')
       return
     }
 
@@ -277,21 +268,62 @@ const handleCreateToken = async () => {
         twitter: formData.twitter.trim() || '',
         telegram: formData.telegram.trim() || '',
         creatorAddress: publicKey.trim(),
-        initialBuyAmount: formData.initialBuyAmount ? parseFloat(formData.initialBuyAmount) : 0,
+        initialBuyAmount: formData.initialBuyAmount && formData.initialBuyAmount.trim() !== '' 
+          ? parseFloat(formData.initialBuyAmount) 
+          : 0,
         totalSupply: 1000000000, // 1 billion tokens
       }
 
-      // Additional validation for URLs if provided
-      if (requestData.website && requestData.website !== '') {
-        try {
-          new URL(requestData.website.startsWith('http') ? requestData.website : `https://${requestData.website}`)
-        } catch {
-          setError('Please enter a valid website URL')
-          return
+      console.log('Creating token with data:', requestData)
+
+      const response = await fetch('/api/tokens', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+      })
+
+      const result: CreateTokenResponse = await response.json()
+
+      if (!response.ok) {
+        console.error('API Error:', result)
+        
+        // Handle specific error codes
+        if (result.code === 'INVALID_ADDRESS' || result.code === 'INVALID_ADDRESS_FORMAT') {
+          throw new Error('Invalid wallet address. Please reconnect your wallet.')
         }
+        
+        // Handle validation errors
+        if (result.details && result.details.length > 0) {
+          throw new Error(result.details[0])
+        }
+        
+        throw new Error(result.error || 'Failed to create token')
       }
 
-    console.log('Creating token with data:', requestData)
+      if (result.success && result.data) {
+        setSuccess(result.data)
+        console.log('Token created successfully:', result.data)
+      } else {
+        throw new Error(result.error || 'Unknown error occurred')
+      }
+
+    } catch (error) {
+      console.error('Token creation failed:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create token'
+      setError(errorMessage)
+      
+      // If it's an address error, suggest wallet reconnection
+      if (errorMessage.includes('Invalid wallet address') || errorMessage.includes('address format')) {
+        setTimeout(() => {
+          setError('Please reconnect your wallet with a valid address')
+        }, 100)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
   // Success state (unchanged)
   if (success) {
     return (
@@ -856,4 +888,5 @@ const handleCreateToken = async () => {
   )
 
 }
+
 
