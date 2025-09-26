@@ -79,11 +79,11 @@ export async function GET(
 
     // Calculate additional metrics
     const totalBought = transactions
-      .filter(tx => tx.type === 'BUY')
+      .filter((tx: any) => tx.type === 'BUY')
       .reduce((sum: number, tx: any) => sum + parseFloat(tx.amount.toString()), 0)
     
     const totalSold = transactions
-      .filter(tx => tx.type === 'SELL')
+      .filter((tx: any) => tx.type === 'SELL')
       .reduce((sum: number, tx: any) => sum + parseFloat(tx.amount.toString()), 0)
 
     const response = {
