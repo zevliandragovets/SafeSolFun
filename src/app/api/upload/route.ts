@@ -1,26 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { writeFile, mkdir } from 'fs/promises'
-import { existsSync } from 'fs'
-import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 
 // Configuration
-const UPLOAD_DIR = path.join(process.cwd(), 'public/uploads')
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-
-// Ensure upload directory exists
-async function ensureUploadDir(dir: string) {
-  try {
-    if (!existsSync(dir)) {
-      await mkdir(dir, { recursive: true })
-      console.log(`Created upload directory: ${dir}`)
-    }
-  } catch (error) {
-    console.error('Error creating upload directory:', error)
-    throw new Error('Failed to create upload directory')
-  }
-}
 
 // Enhanced file validation
 function validateFile(file: File) {
@@ -44,31 +27,21 @@ function validateFile(file: File) {
   return errors
 }
 
-// Generate safe filename with better collision avoidance
-function generateFilename(originalName: string, folder?: string) {
-  const ext = path.extname(originalName).toLowerCase()
-  const baseName = path.basename(originalName, ext).replace(/[^a-zA-Z0-9]/g, '_')
-  const uuid = uuidv4().split('-')[0] // Use shorter UUID
+// Generate safe filename
+function generateFilename(originalName: string) {
+  const ext = originalName.split('.').pop()?.toLowerCase() || 'jpg'
+  const baseName = originalName.split('.')[0].replace(/[^a-zA-Z0-9]/g, '_')
+  const uuid = uuidv4().split('-')[0]
   const timestamp = Date.now()
-  const safeFilename = `${timestamp}_${baseName}_${uuid}${ext}`
-  
-  return safeFilename
+  return `${timestamp}_${baseName}_${uuid}.${ext}`
 }
 
-// Basic image processing (placeholder for future optimization)
-async function processImage(buffer: Buffer, mimeType: string, maxWidth = 1920, maxHeight = 1080): Promise<Buffer> {
-  // Basic implementation - return as-is
-  // In production, you could use sharp for:
-  // - Resizing images
-  // - Converting formats
-  // - Optimizing file size
-  // - Adding watermarks
-  
-  console.log(`Processing image: ${mimeType}, size: ${buffer.length} bytes`)
-  
-  // For now, just return the original buffer
-  // TODO: Implement proper image optimization with sharp
-  return buffer
+// Create optimized data URL
+function createOptimizedDataUrl(buffer: Buffer, mimeType: string): string {
+  // For very large images, we might want to compress them
+  // But for now, just create the data URL
+  const base64 = buffer.toString('base64')
+  return `data:${mimeType};base64,${base64}`
 }
 
 // POST handler for file uploads
@@ -76,10 +49,28 @@ export async function POST(request: NextRequest) {
   try {
     console.log('Upload API called')
     
-    // Parse form data
-    const formData = await request.formData()
+    // Check content length to avoid memory issues
+    const contentLength = request.headers.get('content-length')
+    if (contentLength && parseInt(contentLength) > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: 'File too large' },
+        { status: 413 }
+      )
+    }
+    
+    // Parse form data with error handling
+    let formData: FormData
+    try {
+      formData = await request.formData()
+    } catch (parseError) {
+      console.error('Failed to parse form data:', parseError)
+      return NextResponse.json(
+        { error: 'Invalid form data' },
+        { status: 400 }
+      )
+    }
+    
     const file = formData.get('image') as File
-    const folder = formData.get('folder') as string || 'general'
     
     if (!file) {
       console.error('No file provided in request')
@@ -92,8 +83,7 @@ export async function POST(request: NextRequest) {
     console.log('File received:', {
       name: file.name,
       size: file.size,
-      type: file.type,
-      folder
+      type: file.type
     })
     
     // Validate file
@@ -106,77 +96,106 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Create folder-specific upload directory
-    const folderPath = path.join(UPLOAD_DIR, folder)
-    await ensureUploadDir(folderPath)
-    
     // Generate safe filename
-    const filename = generateFilename(file.name, folder)
-    const filepath = path.join(folderPath, filename)
+    const filename = generateFilename(file.name)
     
-    console.log('Saving file to:', filepath)
+    // Convert file to buffer with memory management
+    let buffer: Buffer
+    try {
+      const bytes = await file.arrayBuffer()
+      buffer = Buffer.from(bytes)
+      
+      // Double-check size after reading
+      if (buffer.length > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          { error: 'File too large after reading' },
+          { status: 413 }
+        )
+      }
+    } catch (bufferError) {
+      console.error('Failed to read file buffer:', bufferError)
+      return NextResponse.json(
+        { error: 'Failed to process file' },
+        { status: 500 }
+      )
+    }
     
-    // Convert file to buffer
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
+    // Create data URL (this is the only option for Vercel serverless)
+    let publicUrl: string
+    try {
+      publicUrl = createOptimizedDataUrl(buffer, file.type)
+      console.log('Data URL created, length:', publicUrl.length)
+    } catch (dataUrlError) {
+      console.error('Failed to create data URL:', dataUrlError)
+      return NextResponse.json(
+        { error: 'Failed to process image' },
+        { status: 500 }
+      )
+    }
     
-    // Process image (currently just returns original)
-    const processedBuffer = await processImage(buffer, file.type)
-    
-    // Save file
-    await writeFile(filepath, processedBuffer)
-    
-    // Generate public URL
-    const publicUrl = `/uploads/${folder}/${filename}`
-    
-    console.log('File uploaded successfully:', {
+    console.log('File processed successfully:', {
       filename,
-      size: processedBuffer.length,
-      url: publicUrl
+      originalSize: file.size,
+      processedSize: buffer.length,
+      dataUrlLength: publicUrl.length
     })
     
     return NextResponse.json({
       success: true,
       filename,
       url: publicUrl,
-      size: processedBuffer.length,
-      type: file.type
+      size: buffer.length,
+      type: file.type,
+      originalSize: file.size
     })
     
   } catch (error: any) {
     console.error('Upload error:', error)
     
     // Handle specific error types
-    if (error.code === 'ENOSPC') {
+    if (error.name === 'PayloadTooLargeError') {
       return NextResponse.json(
-        { error: 'Insufficient storage space' },
-        { status: 507 }
+        { error: 'File too large' },
+        { status: 413 }
       )
     }
     
-    if (error.code === 'EACCES') {
+    if (error.code === 'LIMIT_FILE_SIZE') {
       return NextResponse.json(
-        { error: 'Permission denied' },
-        { status: 500 }
+        { error: 'File size limit exceeded' },
+        { status: 413 }
       )
     }
     
     return NextResponse.json(
       { 
         error: 'Upload failed',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
       },
       { status: 500 }
     )
   }
 }
 
-// GET handler for testing/health check
+// GET handler for health check
 export async function GET() {
   return NextResponse.json({
     message: 'Upload API is working',
     maxFileSize: `${MAX_FILE_SIZE / (1024 * 1024)}MB`,
     allowedTypes: ALLOWED_TYPES,
-    uploadDir: UPLOAD_DIR
+    storage: 'data-url (serverless compatible)',
+    environment: process.env.NODE_ENV || 'development'
+  })
+}
+
+// Add OPTIONS handler for CORS if needed
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
   })
 }
