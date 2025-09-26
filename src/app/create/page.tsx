@@ -105,49 +105,95 @@ export default function CreatePage() {
     return data.url
   }
 
-  const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
-    if (!file) return
+const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
+  if (!file) return
 
-    const preview = URL.createObjectURL(file)
-    const uploadState = type === 'logo' ? logoUpload : bannerUpload
-    const setUploadState = type === 'logo' ? setLogoUpload : setBannerUpload
+  const preview = URL.createObjectURL(file)
+  const uploadState = type === 'logo' ? logoUpload : bannerUpload
+  const setUploadState = type === 'logo' ? setLogoUpload : setBannerUpload
 
+  setUploadState({
+    file,
+    preview,
+    uploading: true,
+    uploaded: false
+  })
+
+  try {
+    const formData = new FormData()
+    formData.append('image', file)
+    
+    console.log(`Uploading ${type}:`, file.name, file.size, file.type)
+    
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        // Don't set Content-Type, let browser set it with boundary for multipart/form-data
+      },
+    })
+    
+    console.log('Upload response status:', response.status)
+    
+    if (!response.ok) {
+      let errorMessage = `Upload failed: ${response.status} ${response.statusText}`
+      try {
+        const errorData = await response.json()
+        errorMessage = errorData.error || errorMessage
+      } catch (parseError) {
+        // If we can't parse the error response, use the default message
+      }
+      throw new Error(errorMessage)
+    }
+    
+    const data = await response.json()
+    console.log('Upload successful:', data)
+    
+    if (!data.success || !data.url) {
+      throw new Error('Invalid response from upload service')
+    }
+    
     setUploadState({
       file,
       preview,
-      uploading: true,
-      uploaded: false
+      uploading: false,
+      uploaded: true
     })
 
-    try {
-      const imageUrl = await uploadImage(file)
-      
-      setUploadState({
-        file,
-        preview,
-        uploading: false,
-        uploaded: true
-      })
-
-      // Update form data with uploaded image URL
-      setFormData(prev => ({
-        ...prev,
-        [type === 'logo' ? 'imageUrl' : 'bannerUrl']: imageUrl
-      }))
-    } catch (error) {
-      console.error('Image upload failed:', error)
-      setUploadState({
-        file: null,
-        preview: null,
-        uploading: false,
-        uploaded: false
-      })
-      
-      if (preview) {
-        URL.revokeObjectURL(preview)
-      }
+    // Update form data with uploaded image URL
+    setFormData(prev => ({
+      ...prev,
+      [type === 'logo' ? 'imageUrl' : 'bannerUrl']: data.url
+    }))
+    
+    console.log(`${type} upload completed successfully`)
+    
+  } catch (error) {
+    console.error(`${type} upload failed:`, error)
+    
+    // Clear the upload state
+    setUploadState({
+      file: null,
+      preview: null,
+      uploading: false,
+      uploaded: false
+    })
+    
+    // Clean up the preview URL
+    if (preview) {
+      URL.revokeObjectURL(preview)
     }
+    
+    // Show error to user
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    setError(`${type === 'logo' ? 'Logo' : 'Banner'} upload failed: ${errorMessage}`)
+    
+    // Auto-clear error after 8 seconds
+    setTimeout(() => {
+      setError(null)
+    }, 8000)
   }
+}
 
   const removeImage = (type: 'logo' | 'banner') => {
     const uploadState = type === 'logo' ? logoUpload : bannerUpload
@@ -825,4 +871,5 @@ export default function CreatePage() {
       </div>
     </div>
   )
+
 }
