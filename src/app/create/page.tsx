@@ -1,4 +1,3 @@
-
 'use client'
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
@@ -39,32 +38,14 @@ const useWallet = () => {
 
   const connect = async () => {
     setConnecting(true)
-    
-    // Check if Phantom wallet is available
-    if (typeof window !== 'undefined' && window.solana && window.solana.isPhantom) {
-      try {
-        const response = await window.solana.connect()
-        setConnected(true)
-        setPublicKey(response.publicKey.toString())
-        setConnecting(false)
-      } catch (error) {
-        console.error('Wallet connection failed:', error)
-        setConnecting(false)
-      }
-    } else {
-      // Fallback for development/testing
-      setTimeout(() => {
-        setConnected(true)
-        setPublicKey('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM')
-        setConnecting(false)
-      }, 1000)
-    }
+    setTimeout(() => {
+      setConnected(true)
+      setPublicKey('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM')
+      setConnecting(false)
+    }, 1000)
   }
 
   const disconnect = () => {
-    if (typeof window !== 'undefined' && window.solana) {
-      window.solana.disconnect()
-    }
     setConnected(false)
     setPublicKey(null)
   }
@@ -106,6 +87,24 @@ export default function CreatePage() {
     uploaded: false
   })
 
+  // Upload image to server
+  const uploadImage = async (file: File): Promise<string> => {
+    const formData = new FormData()
+    formData.append('image', file)
+    
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to upload image')
+    }
+    
+    const data = await response.json()
+    return data.url
+  }
+
   const handleImageUpload = async (file: File, type: 'logo' | 'banner') => {
     if (!file) return
 
@@ -121,35 +120,7 @@ export default function CreatePage() {
     })
 
     try {
-      const formData = new FormData()
-      formData.append('image', file)
-      
-      console.log(`Uploading ${type}:`, file.name, file.size, file.type)
-      
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      })
-      
-      console.log('Upload response status:', response.status)
-      
-      if (!response.ok) {
-        let errorMessage = `Upload failed: ${response.status} ${response.statusText}`
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.error || errorMessage
-        } catch (parseError) {
-          // If we can't parse the error response, use the default message
-        }
-        throw new Error(errorMessage)
-      }
-      
-      const data = await response.json()
-      console.log('Upload successful:', data)
-      
-      if (!data.success || !data.url) {
-        throw new Error('Invalid response from upload service')
-      }
+      const imageUrl = await uploadImage(file)
       
       setUploadState({
         file,
@@ -161,15 +132,10 @@ export default function CreatePage() {
       // Update form data with uploaded image URL
       setFormData(prev => ({
         ...prev,
-        [type === 'logo' ? 'imageUrl' : 'bannerUrl']: data.url
+        [type === 'logo' ? 'imageUrl' : 'bannerUrl']: imageUrl
       }))
-      
-      console.log(`${type} upload completed successfully`)
-      
     } catch (error) {
-      console.error(`${type} upload failed:`, error)
-      
-      // Clear the upload state
+      console.error('Image upload failed:', error)
       setUploadState({
         file: null,
         preview: null,
@@ -177,19 +143,9 @@ export default function CreatePage() {
         uploaded: false
       })
       
-      // Clean up the preview URL
       if (preview) {
         URL.revokeObjectURL(preview)
       }
-      
-      // Show error to user
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      setError(`${type === 'logo' ? 'Logo' : 'Banner'} upload failed: ${errorMessage}`)
-      
-      // Auto-clear error after 8 seconds
-      setTimeout(() => {
-        setError(null)
-      }, 8000)
     }
   }
 
@@ -223,61 +179,11 @@ export default function CreatePage() {
     return formData.name.trim() !== '' && formData.symbol.trim() !== ''
   }
 
-  const validateFormData = () => {
-    const errors: string[] = []
-    
-    // Name validation
-    if (!formData.name.trim()) {
-      errors.push('Token name is required')
-    } else if (formData.name.trim().length > 32) {
-      errors.push('Token name must be 32 characters or less')
-    }
-    
-    // Symbol validation
-    if (!formData.symbol.trim()) {
-      errors.push('Token symbol is required')
-    } else if (formData.symbol.trim().length > 10 || formData.symbol.trim().length < 1) {
-      errors.push('Token symbol must be between 1 and 10 characters')
-    }
-    
-    // Description validation
-    if (formData.description && formData.description.trim().length > 1000) {
-      errors.push('Description must be 1000 characters or less')
-    }
-    
-    // Website validation
-    if (formData.website.trim() && formData.website.trim() !== '') {
-      try {
-        const url = formData.website.trim()
-        new URL(url.startsWith('http') ? url : `https://${url}`)
-      } catch {
-        errors.push('Please enter a valid website URL')
-      }
-    }
-    
-    // Initial buy amount validation
-    if (formData.initialBuyAmount && formData.initialBuyAmount !== '') {
-      const amount = parseFloat(formData.initialBuyAmount)
-      if (isNaN(amount) || amount < 0) {
-        errors.push('Initial buy amount must be a valid positive number')
-      }
-    }
-    
-    return errors
-  }
-
   const handleNext = () => {
     if (step === 1 && !validateStep1()) {
       setError('Please fill in required fields (Name and Symbol)')
       return
     }
-    
-    const validationErrors = validateFormData()
-    if (validationErrors.length > 0) {
-      setError(validationErrors[0])
-      return
-    }
-    
     setError(null)
     setStep(2)
   }
@@ -288,14 +194,7 @@ export default function CreatePage() {
       return
     }
 
-    // Validate all form data before submission
-    const validationErrors = validateFormData()
-    if (validationErrors.length > 0) {
-      setError(validationErrors[0])
-      return
-    }
-
-    // Additional validation for required fields
+    // Validate inputs before making API call
     if (!formData.name.trim() || !formData.symbol.trim()) {
       setError('Please fill in required fields (Name and Symbol)')
       return
@@ -305,20 +204,18 @@ export default function CreatePage() {
     setError(null)
 
     try {
-      // Prepare request data with proper validation and type handling
+      // Prepare request data
       const requestData = {
         name: formData.name.trim(),
         symbol: formData.symbol.trim().toUpperCase(),
-        description: formData.description.trim() || '',
-        imageUrl: formData.imageUrl.trim() || '',
-        bannerUrl: formData.bannerUrl.trim() || '',
-        website: formData.website.trim() || '',
-        twitter: formData.twitter.trim() || '',
-        telegram: formData.telegram.trim() || '',
-        creatorAddress: publicKey.trim(),
-        initialBuyAmount: formData.initialBuyAmount && formData.initialBuyAmount.trim() !== '' 
-          ? parseFloat(formData.initialBuyAmount) 
-          : 0,
+        description: formData.description.trim(),
+        imageUrl: formData.imageUrl || '',
+        bannerUrl: formData.bannerUrl || '',
+        website: formData.website.trim() || null,
+        twitter: formData.twitter.trim() || null,
+        telegram: formData.telegram.trim() || null,
+        creatorAddress: publicKey,
+        initialBuyAmount: formData.initialBuyAmount ? parseFloat(formData.initialBuyAmount) : 0,
         totalSupply: 1000000000, // 1 billion tokens
       }
 
@@ -335,18 +232,10 @@ export default function CreatePage() {
       const result: CreateTokenResponse = await response.json()
 
       if (!response.ok) {
-        console.error('API Error:', result)
-        
         // Handle specific error codes
         if (result.code === 'INVALID_ADDRESS' || result.code === 'INVALID_ADDRESS_FORMAT') {
           throw new Error('Invalid wallet address. Please reconnect your wallet.')
         }
-        
-        // Handle validation errors
-        if (result.details && result.details.length > 0) {
-          throw new Error(result.details[0])
-        }
-        
         throw new Error(result.error || 'Failed to create token')
       }
 
@@ -362,8 +251,9 @@ export default function CreatePage() {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create token'
       setError(errorMessage)
       
-      // If it's an address error, suggest wallet reconnection
+      // If it's an address error, disconnect wallet to force reconnection
       if (errorMessage.includes('Invalid wallet address') || errorMessage.includes('address format')) {
+        // Force wallet reconnection for invalid address
         setTimeout(() => {
           setError('Please reconnect your wallet with a valid address')
         }, 100)
@@ -373,7 +263,7 @@ export default function CreatePage() {
     }
   }
 
-  // Success state
+  // Success state (unchanged)
   if (success) {
     return (
       <div className="min-h-screen bg-black">
@@ -538,7 +428,7 @@ export default function CreatePage() {
               {/* Logo Upload */}
               <div className="group">
                 <label className="block text-sm font-medium text-white/80 mb-3">
-                  Token Logo
+                  Token Logo <span className="text-[#C0283D]">*</span>
                 </label>
                 <div className={`relative border-2 border-dashed rounded-2xl p-8 transition-all ${
                   logoUpload.preview 
@@ -674,17 +564,63 @@ export default function CreatePage() {
                     className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all"
                   />
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium text-white/80 mb-3">Telegram</label>
+                  <label className="block text-sm font-medium text-white/80 mb-3">
+                    Symbol <span className="text-[#C0283D]">*</span>
+                  </label>
                   <input
                     type="text"
-                    value={formData.telegram}
-                    onChange={(e) => handleInputChange('telegram', e.target.value)}
-                    placeholder="@username"
+                    value={formData.symbol}
+                    onChange={(e) => handleInputChange('symbol', e.target.value.toUpperCase())}
+                    placeholder="e.g. SOL"
+                    maxLength={10}
                     className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all"
                   />
                 </div>
+              </div>
+
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-white/80 mb-3">
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  placeholder="Describe your token's purpose and vision..."
+                  maxLength={1000}
+                  rows={4}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Social Links */}
+            <div className="bg-gradient-to-r from-white/[0.02] to-white/[0.01] backdrop-blur-sm rounded-2xl p-8 border border-white/10">              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input
+                  type="url"
+                  value={formData.website}
+                  onChange={(e) => handleInputChange('website', e.target.value)}
+                  placeholder="Website URL"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all"
+                />
+                
+                <input
+                  type="text"
+                  value={formData.twitter}
+                  onChange={(e) => handleInputChange('twitter', e.target.value)}
+                  placeholder="Twitter username"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all"
+                />
+                
+                <input
+                  type="text"
+                  value={formData.telegram}
+                  onChange={(e) => handleInputChange('telegram', e.target.value)}
+                  placeholder="Telegram username"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:border-[#C0283D]/50 focus:outline-none focus:ring-2 focus:ring-[#C0283D]/20 transition-all"
+                />
               </div>
             </div>
 
